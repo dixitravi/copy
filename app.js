@@ -163,11 +163,15 @@ function startPolling() {
     const fresh = data.content || "";
 
     if (fresh !== lastServerContent) {
-      lastServerContent = fresh;
-      if (textarea.value !== fresh) {
-        updateBtn.classList.remove("hidden");
-      }
-    }
+
+  // ✅ Do NOT mutate lastServerContent yet
+  if (textarea.value !== fresh) {
+    updateBtn.classList.remove("hidden");
+  } else {
+    // ✅ Editor already matches server
+    lastServerContent = fresh;
+  }
+}
   }, 3000);
 }
 
