@@ -188,6 +188,7 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+  position: relative;
 }
 
 .editor.full {
@@ -303,7 +304,7 @@ button {
   right: 12px;
   top: 12px;
 
-  background: #f59e0b; /* amber */
+  background: #f59e0b;
   color: #111827;
   border: none;
   border-radius: 999px;
@@ -324,4 +325,26 @@ button {
 
 .update-btn.hidden {
   display: none;
+}
+
+/* ---------- Refresh Button (NEW) ---------- */
+.refresh-btn {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 999px;
+
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: var(--theme-transition);
+}
+
+.refresh-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
 }
