@@ -1,19 +1,26 @@
+/* =========================================================
+   CONFIG – Cloudflare Worker API
+========================================================= */
+const API_URL = "https://bold-bar-31d0.dixitravi.workers.dev";
+
+/* =========================================================
+   Theme Toggle (Animated + Persistent)
+========================================================= */
 const body = document.body;
 const themeToggle = document.getElementById("themeToggle");
 
-/* Disable transition on first paint */
+// Prevent animation on first paint
 requestAnimationFrame(() => {
   body.classList.remove("no-theme-transition");
 });
 
-/* Restore theme */
+// Restore saved theme
 const savedTheme = localStorage.getItem("theme");
 if (savedTheme === "light") {
   body.dataset.theme = "light";
   themeToggle.textContent = "🌞";
 }
 
-/* Theme toggle */
 themeToggle.onclick = () => {
   const isLight = body.dataset.theme === "light";
   body.dataset.theme = isLight ? "" : "light";
@@ -21,17 +28,26 @@ themeToggle.onclick = () => {
   localStorage.setItem("theme", isLight ? "dark" : "light");
 };
 
-/* Elements */
+/* =========================================================
+   Elements
+========================================================= */
+const textarea = document.getElementById("pasteBox");
+const preview = document.getElementById("preview");
+const editor = document.querySelector(".editor");
+
+const saveBtn = document.getElementById("saveBtn");
+const copyBtn = document.getElementById("copyBtn");
+const clearBtn = document.getElementById("clearBtn");
+const status = document.getElementById("timestamp");
+
+const previewToggle = document.getElementById("previewToggle");
+
 const roomPills = document.getElementById("roomPills");
 const roomsContainer = document.getElementById("roomsContainer");
 const togglePagesBtn = document.getElementById("togglePagesBtn");
 const addPageBtn = document.getElementById("addPageBtn");
 
-const previewToggle = document.getElementById("previewToggle");
-const textarea = document.getElementById("pasteBox");
-const preview = document.getElementById("preview");
-const editor = document.querySelector(".editor");
-
+/* Modal */
 const roomModal = document.getElementById("roomModal");
 const modalContent = document.querySelector(".modal-content");
 const roomNameInput = document.getElementById("roomNameInput");
@@ -40,11 +56,16 @@ const closeModalBtn = document.getElementById("closeModalBtn");
 const cancelModal = document.getElementById("cancelModal");
 const createRoomBtn = document.getElementById("createRoomBtn");
 
-/* State */
+/* =========================================================
+   State
+========================================================= */
 let rooms = JSON.parse(localStorage.getItem("rooms")) || ["default"];
 let currentRoom = rooms[0];
 let pagesExpanded = false;
 
+/* =========================================================
+   Helpers
+========================================================= */
 function normalize(name) {
   return name.trim().toLowerCase();
 }
@@ -53,7 +74,37 @@ function roomExists(name) {
   return rooms.some(r => normalize(r) === normalize(name));
 }
 
-/* Render pills */
+/* =========================================================
+   Cloudflare KV API Helpers
+========================================================= */
+async function loadRoomFromServer(room) {
+  try {
+    const res = await fetch(
+      `${API_URL}?room=${encodeURIComponent(room)}`
+    );
+    const data = await res.json();
+    return data.content || "";
+  } catch (err) {
+    console.error("Load failed", err);
+    return "";
+  }
+}
+
+async function saveRoomToServer(room, content) {
+  try {
+    await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ room, content })
+    });
+  } catch (err) {
+    console.error("Save failed", err);
+  }
+}
+
+/* =========================================================
+   Render Page Pills
+========================================================= */
 function renderRooms() {
   roomPills.innerHTML = "";
 
@@ -92,26 +143,62 @@ function renderRooms() {
   });
 }
 
-function switchRoom(room) {
+/* =========================================================
+   Switch Room (LOAD from KV)
+========================================================= */
+async function switchRoom(room) {
   currentRoom = room;
-  textarea.value = localStorage.getItem(`room-${room}`) || "";
+  textarea.value = "Loading…";
+
+  const content = await loadRoomFromServer(room);
+  textarea.value = content;
+
   renderRooms();
 }
 
-/* More / Less */
+/* =========================================================
+   More / Less Toggle
+========================================================= */
 togglePagesBtn.onclick = () => {
   pagesExpanded = !pagesExpanded;
   roomsContainer.classList.toggle("collapsed", !pagesExpanded);
   togglePagesBtn.textContent = pagesExpanded ? "Less" : "More";
 };
 
-/* Preview toggle */
-previewToggle.onchange = e => {
-  editor.classList.toggle("full", !e.target.checked);
-  preview.classList.toggle("hidden", !e.target.checked);
+/* =========================================================
+   Save / Copy / Clear
+========================================================= */
+saveBtn.onclick = async () => {
+  saveBtn.disabled = true;
+  status.textContent = "Saving…";
+
+  await saveRoomToServer(currentRoom, textarea.value);
+
+  status.textContent =
+    "Saved at " + new Date().toLocaleTimeString();
+  saveBtn.disabled = false;
 };
 
-/* Modal */
+copyBtn.onclick = () =>
+  navigator.clipboard.writeText(textarea.value);
+
+clearBtn.onclick = () => {
+  textarea.value = "";
+};
+
+/* =========================================================
+   Preview Toggle
+========================================================= */
+previewToggle.onchange = e => {
+  const on = e.target.checked;
+  editor.classList.toggle("full", !on);
+  preview.classList.toggle("hidden", !on);
+  if (on) preview.innerHTML = textarea.value;
+};
+
+/* =========================================================
+   Modal – Add Page
+========================================================= */
 addPageBtn.onclick = () => {
   roomModal.classList.remove("hidden");
   roomNameInput.value = "";
@@ -120,7 +207,8 @@ addPageBtn.onclick = () => {
   roomNameInput.focus();
 };
 
-closeModalBtn.onclick = cancelModal.onclick = () =>
+closeModalBtn.onclick =
+cancelModal.onclick = () =>
   roomModal.classList.add("hidden");
 
 roomNameInput.addEventListener("keydown", e => {
@@ -128,6 +216,11 @@ roomNameInput.addEventListener("keydown", e => {
     e.preventDefault();
     createRoom();
   }
+});
+
+roomNameInput.addEventListener("input", () => {
+  roomError.classList.add("hidden");
+  modalContent.classList.remove("has-error");
 });
 
 createRoomBtn.onclick = createRoom;
@@ -139,8 +232,9 @@ function createRoom() {
   if (roomExists(name)) {
     roomError.classList.remove("hidden");
     modalContent.classList.add("has-error");
+
     roomNameInput.classList.remove("shake");
-    void roomNameInput.offsetWidth;
+    void roomNameInput.offsetWidth; // reflow
     roomNameInput.classList.add("shake");
     return;
   }
@@ -151,6 +245,8 @@ function createRoom() {
   switchRoom(name);
 }
 
-/* Init */
+/* =========================================================
+   Init
+========================================================= */
 renderRooms();
 switchRoom(currentRoom);
