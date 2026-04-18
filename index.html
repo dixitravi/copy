@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <title>Shared Paste</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
   <link rel="stylesheet" href="styles.css" />
 </head>
 
@@ -14,7 +13,6 @@
 
     <!-- TOP BAR -->
     <header class="topbar">
-      <!-- LEFT -->
       <div class="topbar-left">
         <div class="rooms-container collapsed" id="roomsContainer">
           <div class="rooms" id="roomPills"></div>
@@ -24,12 +22,10 @@
         <button id="togglePagesBtn" class="more-btn hidden">More</button>
       </div>
 
-      <!-- RIGHT -->
       <div class="topbar-right">
         <label class="toggle">
           <input type="checkbox" id="previewToggle" />
-          <span></span>
-          Preview
+          <span></span> Preview
         </label>
         <button id="themeToggle" class="icon-btn">🌙</button>
       </div>
@@ -39,9 +35,14 @@
     <div class="editor full">
       <textarea id="pasteBox" placeholder="Paste or type here…"></textarea>
 
-      <!-- Update available button -->
+      <!-- Update available -->
       <button id="updateBtn" class="update-btn hidden">
         🔄 Update available
+      </button>
+
+      <!-- Manual refresh -->
+      <button id="refreshBtn" class="refresh-btn">
+        ⟳ Refresh
       </button>
 
       <div class="preview hidden" id="preview"></div>
