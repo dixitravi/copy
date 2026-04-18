@@ -143,11 +143,35 @@ function renderRooms() {
     const pill = document.createElement("div");
     pill.className = "pill" + (room === currentRoom ? " active" : "");
 
+    /* ---------- Room label ---------- */
     const label = document.createElement("span");
     label.textContent = room;
     label.onclick = () => switchRoom(room);
-
     pill.appendChild(label);
+
+    /* ---------- Remove button ---------- */
+    if (rooms.length > 1) {
+      const remove = document.createElement("span");
+      remove.className = "remove";
+      remove.textContent = "×";
+
+      remove.onclick = (e) => {
+        e.stopPropagation();
+
+        const idx = rooms.indexOf(room);
+        rooms.splice(idx, 1);
+        localStorage.setItem("rooms", JSON.stringify(rooms));
+
+        if (room === currentRoom) {
+          switchRoom(rooms[0]);
+        } else {
+          renderRooms();
+        }
+      };
+
+      pill.appendChild(remove);
+    }
+
     roomPills.appendChild(pill);
   });
 
