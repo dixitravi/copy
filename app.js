@@ -16,21 +16,21 @@ const CURRENT_USER =
 const body = document.body;
 
 const textarea = document.getElementById("pasteBox");
-const preview = document.getElementById("preview");
-const editor = document.querySelector(".editor");
+const preview  = document.getElementById("preview");
+const editor   = document.querySelector(".editor");
 
-const saveBtn   = document.getElementById("saveBtn");
-const copyBtn   = document.getElementById("copyBtn");
-const clearBtn  = document.getElementById("clearBtn");
-const status    = document.getElementById("timestamp");
+const saveBtn  = document.getElementById("saveBtn");
+const copyBtn  = document.getElementById("copyBtn");
+const clearBtn = document.getElementById("clearBtn");
+const status   = document.getElementById("timestamp");
 
 const previewToggle = document.getElementById("previewToggle");
 const themeToggle   = document.getElementById("themeToggle");
 
-const roomPills       = document.getElementById("roomPills");
-const roomsContainer  = document.getElementById("roomsContainer");
-const togglePagesBtn  = document.getElementById("togglePagesBtn");
-const addPageBtn      = document.getElementById("addPageBtn");
+const roomPills      = document.getElementById("roomPills");
+const roomsContainer = document.getElementById("roomsContainer");
+const togglePagesBtn = document.getElementById("togglePagesBtn");
+const addPageBtn     = document.getElementById("addPageBtn");
 
 const updateBtn  = document.getElementById("updateBtn");
 const refreshBtn = document.getElementById("refreshBtn");
@@ -47,14 +47,14 @@ const createRoomBtn = document.getElementById("createRoomBtn");
 /* =========================================================
    STATE
 ========================================================= */
-let rooms = JSON.parse(localStorage.getItem("rooms")) || ["default"];
-let currentRoom = rooms[0];
+let rooms = ["default"];
+let currentRoom = "default";
 let pagesExpanded = false;
 
 let lastKnownContent  = "";
 let lastServerContent = "";
-let pollingInterval = null;
-let autosaveTimer = null;
+let pollingInterval   = null;
+let autosaveTimer     = null;
 
 /* =========================================================
    THEME
@@ -77,7 +77,7 @@ themeToggle.onclick = () => {
 };
 
 /* =========================================================
-   CLOUD STORAGE HELPERS
+   SERVER HELPERS
 ========================================================= */
 async function loadRoomFromServer(room) {
   const res = await fetch(`${API_URL}?room=${encodeURIComponent(room)}`);
@@ -97,6 +97,30 @@ async function saveRoomToServer(room, content) {
   });
 }
 
+/* ---------- ROOMS SYNC ---------- */
+async function loadRoomsFromServer() {
+  try {
+    const res = await fetch(`${API_URL}?room=__rooms__`);
+    rooms = await res.json();
+    if (!Array.isArray(rooms) || !rooms.length) {
+      rooms = ["default"];
+    }
+  } catch {
+    rooms = JSON.parse(localStorage.getItem("rooms")) || ["default"];
+  }
+  localStorage.setItem("rooms", JSON.stringify(rooms));
+}
+
+async function saveRoomsToServer() {
+  await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rooms })
+  });
+  localStorage.setItem("rooms", JSON.stringify(rooms));
+}
+
+/* ---------- STATUS ---------- */
 async function refreshStatus(room) {
   const data = await loadRoomFromServer(room);
   if (data.updatedBy && data.updatedAt) {
@@ -107,10 +131,10 @@ async function refreshStatus(room) {
 }
 
 /* =========================================================
-   POLLING (near‑real‑time sync)
+   POLLING
 ========================================================= */
 function startPolling() {
-  stopPolling();
+  clearInterval(pollingInterval);
 
   pollingInterval = setInterval(async () => {
     const data = await loadRoomFromServer(currentRoom);
@@ -118,7 +142,6 @@ function startPolling() {
 
     if (fresh !== lastServerContent) {
       lastServerContent = fresh;
-
       if (textarea.value !== fresh) {
         updateBtn.classList.remove("hidden");
       }
@@ -126,15 +149,8 @@ function startPolling() {
   }, 3000);
 }
 
-function stopPolling() {
-  if (pollingInterval) {
-    clearInterval(pollingInterval);
-    pollingInterval = null;
-  }
-}
-
 /* =========================================================
-   RENDER ROOMS
+   RENDER ROOMS (WITH ❌)
 ========================================================= */
 function renderRooms() {
   roomPills.innerHTML = "";
@@ -143,24 +159,21 @@ function renderRooms() {
     const pill = document.createElement("div");
     pill.className = "pill" + (room === currentRoom ? " active" : "");
 
-    /* ---------- Room label ---------- */
     const label = document.createElement("span");
     label.textContent = room;
     label.onclick = () => switchRoom(room);
     pill.appendChild(label);
 
-    /* ---------- Remove button ---------- */
     if (rooms.length > 1) {
       const remove = document.createElement("span");
       remove.className = "remove";
       remove.textContent = "×";
 
-      remove.onclick = (e) => {
+      remove.onclick = async (e) => {
         e.stopPropagation();
 
-        const idx = rooms.indexOf(room);
-        rooms.splice(idx, 1);
-        localStorage.setItem("rooms", JSON.stringify(rooms));
+        rooms = rooms.filter(r => r !== room);
+        await saveRoomsToServer();
 
         if (room === currentRoom) {
           switchRoom(rooms[0]);
@@ -178,7 +191,6 @@ function renderRooms() {
   requestAnimationFrame(() => {
     const maxHeight = 28 * 2 + 8;
     const overflow = roomsContainer.scrollHeight > maxHeight;
-
     togglePagesBtn.classList.toggle("hidden", !overflow);
     roomsContainer.classList.toggle("collapsed", !pagesExpanded);
     togglePagesBtn.textContent = pagesExpanded ? "Less" : "More";
@@ -220,7 +232,7 @@ textarea.addEventListener("input", () => {
 });
 
 /* =========================================================
-   UPDATE AVAILABLE BUTTON
+   UPDATE / REFRESH
 ========================================================= */
 updateBtn.onclick = () => {
   textarea.value = lastServerContent;
@@ -228,27 +240,20 @@ updateBtn.onclick = () => {
   updateBtn.classList.add("hidden");
 };
 
-/* =========================================================
-   REFRESH BUTTON
-========================================================= */
 refreshBtn.onclick = async () => {
   const data = await loadRoomFromServer(currentRoom);
   textarea.value = data.content || "";
-
   lastKnownContent  = textarea.value;
   lastServerContent = textarea.value;
-
   updateBtn.classList.add("hidden");
   await refreshStatus(currentRoom);
 };
 
 /* =========================================================
-   MANUAL ACTIONS
+   ACTIONS
 ========================================================= */
 saveBtn.onclick = async () => {
   await saveRoomToServer(currentRoom, textarea.value);
-  lastKnownContent  = textarea.value;
-  lastServerContent = textarea.value;
   await refreshStatus(currentRoom);
 };
 
@@ -256,7 +261,7 @@ copyBtn.onclick = () => navigator.clipboard.writeText(textarea.value);
 clearBtn.onclick = () => (textarea.value = "");
 
 /* =========================================================
-   PREVIEW TOGGLE
+   PREVIEW
 ========================================================= */
 previewToggle.onchange = e => {
   const on = e.target.checked;
@@ -266,7 +271,7 @@ previewToggle.onchange = e => {
 };
 
 /* =========================================================
-   PAGE MODAL (UNCHANGED)
+   PAGE MODAL
 ========================================================= */
 addPageBtn.onclick = () => {
   roomModal.classList.remove("hidden");
@@ -278,7 +283,7 @@ closeModalBtn.onclick = cancelModal.onclick = () => {
   roomModal.classList.add("hidden");
 };
 
-createRoomBtn.onclick = () => {
+createRoomBtn.onclick = async () => {
   const name = roomNameInput.value.trim();
   if (!name || rooms.includes(name)) {
     roomError.classList.remove("hidden");
@@ -288,7 +293,8 @@ createRoomBtn.onclick = () => {
   }
 
   rooms.push(name);
-  localStorage.setItem("rooms", JSON.stringify(rooms));
+  await saveRoomsToServer();   // ✅ SYNC
+
   roomModal.classList.add("hidden");
   switchRoom(name);
 };
@@ -296,5 +302,9 @@ createRoomBtn.onclick = () => {
 /* =========================================================
    INIT
 ========================================================= */
-renderRooms();
-switchRoom(currentRoom);
+(async function init() {
+  await loadRoomsFromServer();
+  currentRoom = rooms[0];
+  renderRooms();
+  switchRoom(currentRoom);
+})();
