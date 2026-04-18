@@ -4,10 +4,12 @@
   <meta charset="UTF-8" />
   <title>Shared Paste</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body class="no-theme-transition">
+
   <div class="app">
 
     <!-- TOP BAR -->
@@ -35,10 +37,13 @@
 
     <!-- EDITOR -->
     <div class="editor full">
-      <textarea
-        id="pasteBox"
-        placeholder="Paste or type here… (Markdown supported)"
-      ></textarea>
+      <textarea id="pasteBox" placeholder="Paste or type here…"></textarea>
+
+      <!-- Update available button -->
+      <button id="updateBtn" class="update-btn hidden">
+        🔄 Update available
+      </button>
+
       <div class="preview hidden" id="preview"></div>
     </div>
 
@@ -57,11 +62,7 @@
       <button class="modal-close" id="closeModalBtn">×</button>
       <h3>Add new page</h3>
 
-      <input
-        id="roomNameInput"
-        type="text"
-        placeholder="Enter page / room name"
-      />
+      <input id="roomNameInput" type="text" placeholder="Enter page / room name" />
 
       <div class="helper-text error hidden" id="roomError">
         A page with this name already exists
