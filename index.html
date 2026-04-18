@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Shared Paste</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body class="no-theme-transition">
+  <div class="app">
+
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <!-- LEFT -->
+      <div class="topbar-left">
+        <div class="rooms-container collapsed" id="roomsContainer">
+          <div class="rooms" id="roomPills"></div>
+        </div>
+
+        <button id="addPageBtn" class="pill add-page">＋ Add page</button>
+        <button id="togglePagesBtn" class="more-btn hidden">More</button>
+      </div>
+
+      <!-- RIGHT -->
+      <div class="topbar-right">
+        <label class="toggle">
+          <input type="checkbox" id="previewToggle" />
+          <span></span>
+          Preview
+        </label>
+        <button id="themeToggle" class="icon-btn">🌙</button>
+      </div>
+    </header>
+
+    <!-- EDITOR -->
+    <div class="editor full">
+      <textarea
+        id="pasteBox"
+        placeholder="Paste or type here… (Markdown supported)"
+      ></textarea>
+      <div class="preview hidden" id="preview"></div>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="actions">
+      <button id="saveBtn" class="primary">Save</button>
+      <button id="copyBtn" class="secondary">Copy</button>
+      <button id="clearBtn" class="secondary danger">Clear</button>
+      <span class="status" id="timestamp"></span>
+    </div>
+  </div>
+
+  <!-- MODAL -->
+  <div class="modal hidden" id="roomModal">
+    <div class="modal-content">
+      <button class="modal-close" id="closeModalBtn">×</button>
+      <h3>Add new page</h3>
+
+      <input
+        id="roomNameInput"
+        type="text"
+        placeholder="Enter page / room name"
+      />
+
+      <div class="helper-text error hidden" id="roomError">
+        A page with this name already exists
+      </div>
+
+      <div class="modal-actions">
+        <button id="cancelModal" class="secondary">Cancel</button>
+        <button id="createRoomBtn" class="primary">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
