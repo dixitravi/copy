@@ -4,11 +4,11 @@
 const API_URL = "https://bold-bar-31d0.dixitravi.workers.dev";
 
 /* =========================================================
-   USER IDENTIFICATION (simple, replace later if needed)
+   USER IDENTIFICATION
 ========================================================= */
 const CURRENT_USER =
   localStorage.getItem("username") ||
-  `User (${navigator.userAgent.split(" ")[0]})`;
+  `User (${navigator.platform})`;
 
 /* =========================================================
    ELEMENTS
@@ -32,16 +32,17 @@ const roomsContainer  = document.getElementById("roomsContainer");
 const togglePagesBtn  = document.getElementById("togglePagesBtn");
 const addPageBtn      = document.getElementById("addPageBtn");
 
-const updateBtn = document.getElementById("updateBtn");
+const updateBtn  = document.getElementById("updateBtn");
+const refreshBtn = document.getElementById("refreshBtn");
 
 /* Modal */
-const roomModal       = document.getElementById("roomModal");
-const modalContent    = document.querySelector(".modal-content");
-const roomNameInput   = document.getElementById("roomNameInput");
-const roomError       = document.getElementById("roomError");
-const closeModalBtn   = document.getElementById("closeModalBtn");
-const cancelModal     = document.getElementById("cancelModal");
-const createRoomBtn   = document.getElementById("createRoomBtn");
+const roomModal     = document.getElementById("roomModal");
+const modalContent  = document.querySelector(".modal-content");
+const roomNameInput = document.getElementById("roomNameInput");
+const roomError     = document.getElementById("roomError");
+const closeModalBtn = document.getElementById("closeModalBtn");
+const cancelModal   = document.getElementById("cancelModal");
+const createRoomBtn = document.getElementById("createRoomBtn");
 
 /* =========================================================
    STATE
@@ -50,12 +51,13 @@ let rooms = JSON.parse(localStorage.getItem("rooms")) || ["default"];
 let currentRoom = rooms[0];
 let pagesExpanded = false;
 
-let lastKnownContent = "";
+let lastKnownContent  = "";
+let lastServerContent = "";
 let pollingInterval = null;
 let autosaveTimer = null;
 
 /* =========================================================
-   THEME (animated)
+   THEME
 ========================================================= */
 requestAnimationFrame(() => {
   body.classList.remove("no-theme-transition");
@@ -79,14 +81,7 @@ themeToggle.onclick = () => {
 ========================================================= */
 async function loadRoomFromServer(room) {
   const res = await fetch(`${API_URL}?room=${encodeURIComponent(room)}`);
-  const data = await res.json();
-
-  if (data.updatedBy) {
-    const time = new Date(data.updatedAt).toLocaleTimeString();
-    status.textContent = `Last updated by ${data.updatedBy} at ${time}`;
-  }
-
-  return data.content || "";
+  return res.json();
 }
 
 async function saveRoomToServer(room, content) {
@@ -102,6 +97,15 @@ async function saveRoomToServer(room, content) {
   });
 }
 
+async function refreshStatus(room) {
+  const data = await loadRoomFromServer(room);
+  if (data.updatedBy && data.updatedAt) {
+    status.textContent =
+      `Last updated by ${data.updatedBy} at ` +
+      new Date(data.updatedAt).toLocaleTimeString();
+  }
+}
+
 /* =========================================================
    POLLING (near‑real‑time sync)
 ========================================================= */
@@ -109,15 +113,14 @@ function startPolling() {
   stopPolling();
 
   pollingInterval = setInterval(async () => {
-    const fresh = await loadRoomFromServer(currentRoom);
+    const data = await loadRoomFromServer(currentRoom);
+    const fresh = data.content || "";
 
-    if (fresh !== lastKnownContent) {
-      if (document.activeElement === textarea) {
+    if (fresh !== lastServerContent) {
+      lastServerContent = fresh;
+
+      if (textarea.value !== fresh) {
         updateBtn.classList.remove("hidden");
-      } else {
-        textarea.value = fresh;
-        lastKnownContent = fresh;
-        updateBtn.classList.add("hidden");
       }
     }
   }, 3000);
@@ -131,7 +134,7 @@ function stopPolling() {
 }
 
 /* =========================================================
-   RENDER PAGES
+   RENDER ROOMS
 ========================================================= */
 function renderRooms() {
   roomPills.innerHTML = "";
@@ -143,8 +146,8 @@ function renderRooms() {
     const label = document.createElement("span");
     label.textContent = room;
     label.onclick = () => switchRoom(room);
-    pill.appendChild(label);
 
+    pill.appendChild(label);
     roomPills.appendChild(pill);
   });
 
@@ -165,17 +168,20 @@ async function switchRoom(room) {
   currentRoom = room;
   textarea.value = "Loading…";
 
-  const content = await loadRoomFromServer(room);
-  textarea.value = content;
-  lastKnownContent = content;
+  const data = await loadRoomFromServer(room);
+  textarea.value = data.content || "";
+
+  lastKnownContent  = textarea.value;
+  lastServerContent = textarea.value;
 
   updateBtn.classList.add("hidden");
   renderRooms();
+  await refreshStatus(room);
   startPolling();
 }
 
 /* =========================================================
-   AUTOSAVE (debounced)
+   AUTOSAVE
 ========================================================= */
 textarea.addEventListener("input", () => {
   updateBtn.classList.add("hidden");
@@ -183,19 +189,33 @@ textarea.addEventListener("input", () => {
   clearTimeout(autosaveTimer);
   autosaveTimer = setTimeout(async () => {
     await saveRoomToServer(currentRoom, textarea.value);
-    lastKnownContent = textarea.value;
-    status.textContent = "Auto‑saved at " + new Date().toLocaleTimeString();
+    lastKnownContent  = textarea.value;
+    lastServerContent = textarea.value;
+    await refreshStatus(currentRoom);
   }, 2000);
 });
 
 /* =========================================================
-   UPDATE BUTTON
+   UPDATE AVAILABLE BUTTON
 ========================================================= */
-updateBtn.onclick = async () => {
-  const content = await loadRoomFromServer(currentRoom);
-  textarea.value = content;
-  lastKnownContent = content;
+updateBtn.onclick = () => {
+  textarea.value = lastServerContent;
+  lastKnownContent = lastServerContent;
   updateBtn.classList.add("hidden");
+};
+
+/* =========================================================
+   REFRESH BUTTON
+========================================================= */
+refreshBtn.onclick = async () => {
+  const data = await loadRoomFromServer(currentRoom);
+  textarea.value = data.content || "";
+
+  lastKnownContent  = textarea.value;
+  lastServerContent = textarea.value;
+
+  updateBtn.classList.add("hidden");
+  await refreshStatus(currentRoom);
 };
 
 /* =========================================================
@@ -203,8 +223,9 @@ updateBtn.onclick = async () => {
 ========================================================= */
 saveBtn.onclick = async () => {
   await saveRoomToServer(currentRoom, textarea.value);
-  lastKnownContent = textarea.value;
-  status.textContent = "Saved at " + new Date().toLocaleTimeString();
+  lastKnownContent  = textarea.value;
+  lastServerContent = textarea.value;
+  await refreshStatus(currentRoom);
 };
 
 copyBtn.onclick = () => navigator.clipboard.writeText(textarea.value);
@@ -218,6 +239,34 @@ previewToggle.onchange = e => {
   editor.classList.toggle("full", !on);
   preview.classList.toggle("hidden", !on);
   if (on) preview.innerHTML = textarea.value;
+};
+
+/* =========================================================
+   PAGE MODAL (UNCHANGED)
+========================================================= */
+addPageBtn.onclick = () => {
+  roomModal.classList.remove("hidden");
+  roomNameInput.value = "";
+  roomError.classList.add("hidden");
+};
+
+closeModalBtn.onclick = cancelModal.onclick = () => {
+  roomModal.classList.add("hidden");
+};
+
+createRoomBtn.onclick = () => {
+  const name = roomNameInput.value.trim();
+  if (!name || rooms.includes(name)) {
+    roomError.classList.remove("hidden");
+    modalContent.classList.add("shake");
+    setTimeout(() => modalContent.classList.remove("shake"), 250);
+    return;
+  }
+
+  rooms.push(name);
+  localStorage.setItem("rooms", JSON.stringify(rooms));
+  roomModal.classList.add("hidden");
+  switchRoom(name);
 };
 
 /* =========================================================
