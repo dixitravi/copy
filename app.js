@@ -51,10 +51,9 @@ let rooms = ["default"];
 let currentRoom = "default";
 let pagesExpanded = false;
 
-let lastKnownContent  = "";
 let lastServerContent = "";
-let pollingInterval   = null;
-let autosaveTimer     = null;
+let pollingInterval = null;
+let autosaveTimer = null;
 
 /* =========================================================
    THEME
@@ -87,11 +86,11 @@ async function loadRoomFromServer(room) {
 }
 
 async function saveRoomToServer(room, content) {
-  await fetch(API_URL, {
+  await fetch(`${API_URL}?room=${encodeURIComponent(room)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      room,
+      type: "content-update",
       content,
       updatedBy: CURRENT_USER,
       updatedAt: new Date().toISOString()
@@ -100,11 +99,13 @@ async function saveRoomToServer(room, content) {
 }
 
 /* =========================================================
-   ROOMS SYNC (SERVER AUTHORITATIVE)
+   ROOMS SYNC (AUTHORITATIVE)
 ========================================================= */
 async function loadRoomsFromServer() {
   try {
-    const res = await fetch(`${API_URL}?room=__rooms__`, { cache: "no-store" });
+    const res = await fetch(`${API_URL}?room=__rooms__`, {
+      cache: "no-store"
+    });
     const serverRooms = await res.json();
 
     if (Array.isArray(serverRooms) && serverRooms.length) {
@@ -112,19 +113,21 @@ async function loadRoomsFromServer() {
       return;
     }
 
-    throw new Error("Empty rooms");
+    throw new Error("Invalid rooms");
   } catch {
-    // ✅ fallback only
+    // offline fallback only
     rooms = JSON.parse(localStorage.getItem("rooms")) || ["default"];
   }
 }
 
 async function saveRoomsToServer() {
-  // ✅ server only
   await fetch(API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rooms })
+    body: JSON.stringify({
+      type: "rooms-update",
+      rooms
+    })
   });
 }
 
@@ -141,7 +144,7 @@ async function refreshStatus(room) {
 }
 
 /* =========================================================
-   POLLING
+   POLLING (PER ROOM)
 ========================================================= */
 function startPolling() {
   clearInterval(pollingInterval);
@@ -160,7 +163,7 @@ function startPolling() {
 }
 
 /* =========================================================
-   RENDER ROOMS
+   RENDER ROOMS (WITH DELETE)
 ========================================================= */
 function renderRooms() {
   roomPills.innerHTML = "";
@@ -196,19 +199,27 @@ function renderRooms() {
 
     roomPills.appendChild(pill);
   });
+
+  requestAnimationFrame(() => {
+    const maxHeight = 28 * 2 + 8;
+    const overflow = roomsContainer.scrollHeight > maxHeight;
+    togglePagesBtn.classList.toggle("hidden", !overflow);
+    roomsContainer.classList.toggle("collapsed", !pagesExpanded);
+    togglePagesBtn.textContent = pagesExpanded ? "Less" : "More";
+  });
 }
 
 /* =========================================================
-   SWITCH ROOM
+   SWITCH ROOM (HARD ISOLATION)
 ========================================================= */
 async function switchRoom(room) {
+  clearInterval(pollingInterval);
+
   currentRoom = room;
   textarea.value = "Loading…";
 
   const data = await loadRoomFromServer(room);
   textarea.value = data.content || "";
-
-  lastKnownContent  = textarea.value;
   lastServerContent = textarea.value;
 
   updateBtn.classList.add("hidden");
@@ -218,13 +229,12 @@ async function switchRoom(room) {
 }
 
 /* =========================================================
-   AUTOSAVE
+   AUTOSAVE (ROOM-SCOPED)
 ========================================================= */
 textarea.addEventListener("input", () => {
   clearTimeout(autosaveTimer);
   autosaveTimer = setTimeout(async () => {
     await saveRoomToServer(currentRoom, textarea.value);
-    lastKnownContent  = textarea.value;
     lastServerContent = textarea.value;
     await refreshStatus(currentRoom);
   }, 2000);
@@ -242,7 +252,29 @@ refreshBtn.onclick = async () => {
   const data = await loadRoomFromServer(currentRoom);
   textarea.value = data.content || "";
   lastServerContent = textarea.value;
+  updateBtn.classList.add("hidden");
   await refreshStatus(currentRoom);
+};
+
+/* =========================================================
+   ACTIONS
+========================================================= */
+saveBtn.onclick = async () => {
+  await saveRoomToServer(currentRoom, textarea.value);
+  await refreshStatus(currentRoom);
+};
+
+copyBtn.onclick = () => navigator.clipboard.writeText(textarea.value);
+clearBtn.onclick = () => (textarea.value = "");
+
+/* =========================================================
+   PREVIEW
+========================================================= */
+previewToggle.onchange = e => {
+  const on = e.target.checked;
+  editor.classList.toggle("full", !on);
+  preview.classList.toggle("hidden", !on);
+  if (on) preview.innerHTML = textarea.value;
 };
 
 /* =========================================================
