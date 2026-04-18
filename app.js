@@ -4,17 +4,63 @@
 const API_URL = "https://bold-bar-31d0.dixitravi.workers.dev";
 
 /* =========================================================
-   Theme Toggle (Animated + Persistent)
+   USER IDENTIFICATION (simple, replace later if needed)
+========================================================= */
+const CURRENT_USER =
+  localStorage.getItem("username") ||
+  `User (${navigator.userAgent.split(" ")[0]})`;
+
+/* =========================================================
+   ELEMENTS
 ========================================================= */
 const body = document.body;
-const themeToggle = document.getElementById("themeToggle");
 
-// Prevent animation on first paint
+const textarea = document.getElementById("pasteBox");
+const preview = document.getElementById("preview");
+const editor = document.querySelector(".editor");
+
+const saveBtn   = document.getElementById("saveBtn");
+const copyBtn   = document.getElementById("copyBtn");
+const clearBtn  = document.getElementById("clearBtn");
+const status    = document.getElementById("timestamp");
+
+const previewToggle = document.getElementById("previewToggle");
+const themeToggle   = document.getElementById("themeToggle");
+
+const roomPills       = document.getElementById("roomPills");
+const roomsContainer  = document.getElementById("roomsContainer");
+const togglePagesBtn  = document.getElementById("togglePagesBtn");
+const addPageBtn      = document.getElementById("addPageBtn");
+
+const updateBtn = document.getElementById("updateBtn");
+
+/* Modal */
+const roomModal       = document.getElementById("roomModal");
+const modalContent    = document.querySelector(".modal-content");
+const roomNameInput   = document.getElementById("roomNameInput");
+const roomError       = document.getElementById("roomError");
+const closeModalBtn   = document.getElementById("closeModalBtn");
+const cancelModal     = document.getElementById("cancelModal");
+const createRoomBtn   = document.getElementById("createRoomBtn");
+
+/* =========================================================
+   STATE
+========================================================= */
+let rooms = JSON.parse(localStorage.getItem("rooms")) || ["default"];
+let currentRoom = rooms[0];
+let pagesExpanded = false;
+
+let lastKnownContent = "";
+let pollingInterval = null;
+let autosaveTimer = null;
+
+/* =========================================================
+   THEME (animated)
+========================================================= */
 requestAnimationFrame(() => {
   body.classList.remove("no-theme-transition");
 });
 
-// Restore saved theme
 const savedTheme = localStorage.getItem("theme");
 if (savedTheme === "light") {
   body.dataset.theme = "light";
@@ -29,105 +75,52 @@ themeToggle.onclick = () => {
 };
 
 /* =========================================================
-   Elements
-========================================================= */
-const textarea = document.getElementById("pasteBox");
-const preview = document.getElementById("preview");
-const editor = document.querySelector(".editor");
-
-const saveBtn = document.getElementById("saveBtn");
-const copyBtn = document.getElementById("copyBtn");
-const clearBtn = document.getElementById("clearBtn");
-const status = document.getElementById("timestamp");
-
-const previewToggle = document.getElementById("previewToggle");
-
-const roomPills = document.getElementById("roomPills");
-const roomsContainer = document.getElementById("roomsContainer");
-const togglePagesBtn = document.getElementById("togglePagesBtn");
-const addPageBtn = document.getElementById("addPageBtn");
-
-/* Modal */
-const roomModal = document.getElementById("roomModal");
-const modalContent = document.querySelector(".modal-content");
-const roomNameInput = document.getElementById("roomNameInput");
-const roomError = document.getElementById("roomError");
-const closeModalBtn = document.getElementById("closeModalBtn");
-const cancelModal = document.getElementById("cancelModal");
-const createRoomBtn = document.getElementById("createRoomBtn");
-
-/* =========================================================
-   State
-========================================================= */
-let rooms = JSON.parse(localStorage.getItem("rooms")) || ["default"];
-let currentRoom = rooms[0];
-let pagesExpanded = false;
-
-/* Polling state */
-let lastKnownContent = "";
-let pollingInterval = null;
-
-/* =========================================================
-   Helpers
-========================================================= */
-function normalize(name) {
-  return name.trim().toLowerCase();
-}
-
-function roomExists(name) {
-  return rooms.some(r => normalize(r) === normalize(name));
-}
-
-/* =========================================================
-   Cloudflare KV API Helpers
+   CLOUD STORAGE HELPERS
 ========================================================= */
 async function loadRoomFromServer(room) {
-  try {
-    const res = await fetch(
-      `${API_URL}?room=${encodeURIComponent(room)}`
-    );
-    const data = await res.json();
-    return data.content || "";
-  } catch (err) {
-    console.error("Load failed", err);
-    return "";
+  const res = await fetch(`${API_URL}?room=${encodeURIComponent(room)}`);
+  const data = await res.json();
+
+  if (data.updatedBy) {
+    const time = new Date(data.updatedAt).toLocaleTimeString();
+    status.textContent = `Last updated by ${data.updatedBy} at ${time}`;
   }
+
+  return data.content || "";
 }
 
 async function saveRoomToServer(room, content) {
-  try {
-    await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ room, content })
-    });
-  } catch (err) {
-    console.error("Save failed", err);
-  }
+  await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      room,
+      content,
+      updatedBy: CURRENT_USER,
+      updatedAt: new Date().toISOString()
+    })
+  });
 }
 
 /* =========================================================
-   Polling (Near-Real-Time Sync)
+   POLLING (near‑real‑time sync)
 ========================================================= */
 function startPolling() {
   stopPolling();
 
   pollingInterval = setInterval(async () => {
-    try {
-      const freshContent = await loadRoomFromServer(currentRoom);
+    const fresh = await loadRoomFromServer(currentRoom);
 
-      // Update only if content changed and user is NOT typing
-      if (
-        freshContent !== lastKnownContent &&
-        document.activeElement !== textarea
-      ) {
-        textarea.value = freshContent;
-        lastKnownContent = freshContent;
+    if (fresh !== lastKnownContent) {
+      if (document.activeElement === textarea) {
+        updateBtn.classList.remove("hidden");
+      } else {
+        textarea.value = fresh;
+        lastKnownContent = fresh;
+        updateBtn.classList.add("hidden");
       }
-    } catch (err) {
-      console.error("Polling failed", err);
     }
-  }, 3000); // every 3 seconds
+  }, 3000);
 }
 
 function stopPolling() {
@@ -138,7 +131,7 @@ function stopPolling() {
 }
 
 /* =========================================================
-   Render Page Pills
+   RENDER PAGES
 ========================================================= */
 function renderRooms() {
   roomPills.innerHTML = "";
@@ -152,34 +145,21 @@ function renderRooms() {
     label.onclick = () => switchRoom(room);
     pill.appendChild(label);
 
-    if (rooms.length > 1) {
-      const remove = document.createElement("span");
-      remove.textContent = "×";
-      remove.className = "remove";
-      remove.onclick = e => {
-        e.stopPropagation();
-        rooms = rooms.filter(r => r !== room);
-        localStorage.setItem("rooms", JSON.stringify(rooms));
-        switchRoom(rooms[0]);
-      };
-      pill.appendChild(remove);
-    }
-
     roomPills.appendChild(pill);
   });
 
   requestAnimationFrame(() => {
     const maxHeight = 28 * 2 + 8;
-    const isOverflowing = roomsContainer.scrollHeight > maxHeight;
+    const overflow = roomsContainer.scrollHeight > maxHeight;
 
-    togglePagesBtn.classList.toggle("hidden", !isOverflowing);
+    togglePagesBtn.classList.toggle("hidden", !overflow);
     roomsContainer.classList.toggle("collapsed", !pagesExpanded);
     togglePagesBtn.textContent = pagesExpanded ? "Less" : "More";
   });
 }
 
 /* =========================================================
-   Switch Room (LOAD from KV + start polling)
+   SWITCH ROOM
 ========================================================= */
 async function switchRoom(room) {
   currentRoom = room;
@@ -189,43 +169,49 @@ async function switchRoom(room) {
   textarea.value = content;
   lastKnownContent = content;
 
+  updateBtn.classList.add("hidden");
   renderRooms();
   startPolling();
 }
 
 /* =========================================================
-   More / Less Toggle
+   AUTOSAVE (debounced)
 ========================================================= */
-togglePagesBtn.onclick = () => {
-  pagesExpanded = !pagesExpanded;
-  roomsContainer.classList.toggle("collapsed", !pagesExpanded);
-  togglePagesBtn.textContent = pagesExpanded ? "Less" : "More";
+textarea.addEventListener("input", () => {
+  updateBtn.classList.add("hidden");
+
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(async () => {
+    await saveRoomToServer(currentRoom, textarea.value);
+    lastKnownContent = textarea.value;
+    status.textContent = "Auto‑saved at " + new Date().toLocaleTimeString();
+  }, 2000);
+});
+
+/* =========================================================
+   UPDATE BUTTON
+========================================================= */
+updateBtn.onclick = async () => {
+  const content = await loadRoomFromServer(currentRoom);
+  textarea.value = content;
+  lastKnownContent = content;
+  updateBtn.classList.add("hidden");
 };
 
 /* =========================================================
-   Save / Copy / Clear
+   MANUAL ACTIONS
 ========================================================= */
 saveBtn.onclick = async () => {
-  saveBtn.disabled = true;
-  status.textContent = "Saving…";
-
   await saveRoomToServer(currentRoom, textarea.value);
   lastKnownContent = textarea.value;
-
-  status.textContent =
-    "Saved at " + new Date().toLocaleTimeString();
-  saveBtn.disabled = false;
+  status.textContent = "Saved at " + new Date().toLocaleTimeString();
 };
 
-copyBtn.onclick = () =>
-  navigator.clipboard.writeText(textarea.value);
-
-clearBtn.onclick = () => {
-  textarea.value = "";
-};
+copyBtn.onclick = () => navigator.clipboard.writeText(textarea.value);
+clearBtn.onclick = () => (textarea.value = "");
 
 /* =========================================================
-   Preview Toggle
+   PREVIEW TOGGLE
 ========================================================= */
 previewToggle.onchange = e => {
   const on = e.target.checked;
@@ -235,56 +221,7 @@ previewToggle.onchange = e => {
 };
 
 /* =========================================================
-   Modal – Add Page
-========================================================= */
-addPageBtn.onclick = () => {
-  roomModal.classList.remove("hidden");
-  roomNameInput.value = "";
-  roomError.classList.add("hidden");
-  modalContent.classList.remove("has-error");
-  roomNameInput.focus();
-};
-
-closeModalBtn.onclick =
-cancelModal.onclick = () =>
-  roomModal.classList.add("hidden");
-
-roomNameInput.addEventListener("keydown", e => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    createRoom();
-  }
-});
-
-roomNameInput.addEventListener("input", () => {
-  roomError.classList.add("hidden");
-  modalContent.classList.remove("has-error");
-});
-
-createRoomBtn.onclick = createRoom;
-
-function createRoom() {
-  const name = roomNameInput.value.trim();
-  if (!name) return;
-
-  if (roomExists(name)) {
-    roomError.classList.remove("hidden");
-    modalContent.classList.add("has-error");
-
-    roomNameInput.classList.remove("shake");
-    void roomNameInput.offsetWidth;
-    roomNameInput.classList.add("shake");
-    return;
-  }
-
-  rooms.push(name);
-  localStorage.setItem("rooms", JSON.stringify(rooms));
-  roomModal.classList.add("hidden");
-  switchRoom(name);
-}
-
-/* =========================================================
-   Init
+   INIT
 ========================================================= */
 renderRooms();
 switchRoom(currentRoom);
