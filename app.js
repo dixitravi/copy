@@ -1,10 +1,10 @@
 /* =========================================================
-   CONFIG – Cloudflare Worker API
+   CONFIG
 ========================================================= */
 const API_URL = "https://bold-bar-31d0.dixitravi.workers.dev";
 
 /* =========================================================
-   USER IDENTIFICATION
+   USER
 ========================================================= */
 const CURRENT_USER =
   localStorage.getItem("username") ||
@@ -80,7 +80,9 @@ themeToggle.onclick = () => {
    SERVER HELPERS
 ========================================================= */
 async function loadRoomFromServer(room) {
-  const res = await fetch(`${API_URL}?room=${encodeURIComponent(room)}`);
+  const res = await fetch(`${API_URL}?room=${encodeURIComponent(room)}`, {
+    cache: "no-store"
+  });
   return res.json();
 }
 
@@ -97,30 +99,38 @@ async function saveRoomToServer(room, content) {
   });
 }
 
-/* ---------- ROOMS SYNC ---------- */
+/* =========================================================
+   ROOMS SYNC (SERVER AUTHORITATIVE)
+========================================================= */
 async function loadRoomsFromServer() {
   try {
-    const res = await fetch(`${API_URL}?room=__rooms__`);
-    rooms = await res.json();
-    if (!Array.isArray(rooms) || !rooms.length) {
-      rooms = ["default"];
+    const res = await fetch(`${API_URL}?room=__rooms__`, { cache: "no-store" });
+    const serverRooms = await res.json();
+
+    if (Array.isArray(serverRooms) && serverRooms.length) {
+      rooms = serverRooms;
+      return;
     }
+
+    throw new Error("Empty rooms");
   } catch {
+    // ✅ fallback only
     rooms = JSON.parse(localStorage.getItem("rooms")) || ["default"];
   }
-  localStorage.setItem("rooms", JSON.stringify(rooms));
 }
 
 async function saveRoomsToServer() {
+  // ✅ server only
   await fetch(API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ rooms })
   });
-  localStorage.setItem("rooms", JSON.stringify(rooms));
 }
 
-/* ---------- STATUS ---------- */
+/* =========================================================
+   STATUS
+========================================================= */
 async function refreshStatus(room) {
   const data = await loadRoomFromServer(room);
   if (data.updatedBy && data.updatedAt) {
@@ -150,7 +160,7 @@ function startPolling() {
 }
 
 /* =========================================================
-   RENDER ROOMS (WITH ❌)
+   RENDER ROOMS
 ========================================================= */
 function renderRooms() {
   roomPills.innerHTML = "";
@@ -171,7 +181,6 @@ function renderRooms() {
 
       remove.onclick = async (e) => {
         e.stopPropagation();
-
         rooms = rooms.filter(r => r !== room);
         await saveRoomsToServer();
 
@@ -186,14 +195,6 @@ function renderRooms() {
     }
 
     roomPills.appendChild(pill);
-  });
-
-  requestAnimationFrame(() => {
-    const maxHeight = 28 * 2 + 8;
-    const overflow = roomsContainer.scrollHeight > maxHeight;
-    togglePagesBtn.classList.toggle("hidden", !overflow);
-    roomsContainer.classList.toggle("collapsed", !pagesExpanded);
-    togglePagesBtn.textContent = pagesExpanded ? "Less" : "More";
   });
 }
 
@@ -220,8 +221,6 @@ async function switchRoom(room) {
    AUTOSAVE
 ========================================================= */
 textarea.addEventListener("input", () => {
-  updateBtn.classList.add("hidden");
-
   clearTimeout(autosaveTimer);
   autosaveTimer = setTimeout(async () => {
     await saveRoomToServer(currentRoom, textarea.value);
@@ -236,38 +235,14 @@ textarea.addEventListener("input", () => {
 ========================================================= */
 updateBtn.onclick = () => {
   textarea.value = lastServerContent;
-  lastKnownContent = lastServerContent;
   updateBtn.classList.add("hidden");
 };
 
 refreshBtn.onclick = async () => {
   const data = await loadRoomFromServer(currentRoom);
   textarea.value = data.content || "";
-  lastKnownContent  = textarea.value;
   lastServerContent = textarea.value;
-  updateBtn.classList.add("hidden");
   await refreshStatus(currentRoom);
-};
-
-/* =========================================================
-   ACTIONS
-========================================================= */
-saveBtn.onclick = async () => {
-  await saveRoomToServer(currentRoom, textarea.value);
-  await refreshStatus(currentRoom);
-};
-
-copyBtn.onclick = () => navigator.clipboard.writeText(textarea.value);
-clearBtn.onclick = () => (textarea.value = "");
-
-/* =========================================================
-   PREVIEW
-========================================================= */
-previewToggle.onchange = e => {
-  const on = e.target.checked;
-  editor.classList.toggle("full", !on);
-  preview.classList.toggle("hidden", !on);
-  if (on) preview.innerHTML = textarea.value;
 };
 
 /* =========================================================
@@ -293,8 +268,7 @@ createRoomBtn.onclick = async () => {
   }
 
   rooms.push(name);
-  await saveRoomsToServer();   // ✅ SYNC
-
+  await saveRoomsToServer();
   roomModal.classList.add("hidden");
   switchRoom(name);
 };
