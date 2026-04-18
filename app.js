@@ -99,13 +99,11 @@ async function saveRoomToServer(room, content) {
 }
 
 /* =========================================================
-   ROOMS SYNC (AUTHORITATIVE)
+   ROOMS SYNC
 ========================================================= */
 async function loadRoomsFromServer() {
   try {
-    const res = await fetch(`${API_URL}?room=__rooms__`, {
-      cache: "no-store"
-    });
+    const res = await fetch(`${API_URL}?room=__rooms__`, { cache: "no-store" });
     const serverRooms = await res.json();
 
     if (Array.isArray(serverRooms) && serverRooms.length) {
@@ -115,7 +113,6 @@ async function loadRoomsFromServer() {
 
     throw new Error("Invalid rooms");
   } catch {
-    // offline fallback only
     rooms = JSON.parse(localStorage.getItem("rooms")) || ["default"];
   }
 }
@@ -144,6 +141,18 @@ async function refreshStatus(room) {
 }
 
 /* =========================================================
+   SAVE-IF-DIRTY (KEY FIX)
+========================================================= */
+async function saveIfDirty() {
+  if (textarea.value !== lastServerContent) {
+    await saveRoomToServer(currentRoom, textarea.value);
+    lastServerContent = textarea.value;
+    updateBtn.classList.add("hidden");
+    await refreshStatus(currentRoom);
+  }
+}
+
+/* =========================================================
    POLLING (PER ROOM)
 ========================================================= */
 function startPolling() {
@@ -163,7 +172,7 @@ function startPolling() {
 }
 
 /* =========================================================
-   RENDER ROOMS (WITH DELETE)
+   RENDER ROOMS
 ========================================================= */
 function renderRooms() {
   roomPills.innerHTML = "";
@@ -199,20 +208,13 @@ function renderRooms() {
 
     roomPills.appendChild(pill);
   });
-
-  requestAnimationFrame(() => {
-    const maxHeight = 28 * 2 + 8;
-    const overflow = roomsContainer.scrollHeight > maxHeight;
-    togglePagesBtn.classList.toggle("hidden", !overflow);
-    roomsContainer.classList.toggle("collapsed", !pagesExpanded);
-    togglePagesBtn.textContent = pagesExpanded ? "Less" : "More";
-  });
 }
 
 /* =========================================================
-   SWITCH ROOM (HARD ISOLATION)
+   SWITCH ROOM (AUTO-SAVE ENABLED)
 ========================================================= */
 async function switchRoom(room) {
+  await saveIfDirty();
   clearInterval(pollingInterval);
 
   currentRoom = room;
@@ -229,13 +231,14 @@ async function switchRoom(room) {
 }
 
 /* =========================================================
-   AUTOSAVE (ROOM-SCOPED)
+   AUTOSAVE
 ========================================================= */
 textarea.addEventListener("input", () => {
   clearTimeout(autosaveTimer);
   autosaveTimer = setTimeout(async () => {
     await saveRoomToServer(currentRoom, textarea.value);
     lastServerContent = textarea.value;
+    updateBtn.classList.add("hidden");
     await refreshStatus(currentRoom);
   }, 2000);
 });
@@ -261,6 +264,8 @@ refreshBtn.onclick = async () => {
 ========================================================= */
 saveBtn.onclick = async () => {
   await saveRoomToServer(currentRoom, textarea.value);
+  lastServerContent = textarea.value;
+  updateBtn.classList.add("hidden");
   await refreshStatus(currentRoom);
 };
 
