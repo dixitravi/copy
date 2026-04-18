@@ -63,6 +63,10 @@ let rooms = JSON.parse(localStorage.getItem("rooms")) || ["default"];
 let currentRoom = rooms[0];
 let pagesExpanded = false;
 
+/* Polling state */
+let lastKnownContent = "";
+let pollingInterval = null;
+
 /* =========================================================
    Helpers
 ========================================================= */
@@ -99,6 +103,37 @@ async function saveRoomToServer(room, content) {
     });
   } catch (err) {
     console.error("Save failed", err);
+  }
+}
+
+/* =========================================================
+   Polling (Near-Real-Time Sync)
+========================================================= */
+function startPolling() {
+  stopPolling();
+
+  pollingInterval = setInterval(async () => {
+    try {
+      const freshContent = await loadRoomFromServer(currentRoom);
+
+      // Update only if content changed and user is NOT typing
+      if (
+        freshContent !== lastKnownContent &&
+        document.activeElement !== textarea
+      ) {
+        textarea.value = freshContent;
+        lastKnownContent = freshContent;
+      }
+    } catch (err) {
+      console.error("Polling failed", err);
+    }
+  }, 3000); // every 3 seconds
+}
+
+function stopPolling() {
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+    pollingInterval = null;
   }
 }
 
@@ -144,7 +179,7 @@ function renderRooms() {
 }
 
 /* =========================================================
-   Switch Room (LOAD from KV)
+   Switch Room (LOAD from KV + start polling)
 ========================================================= */
 async function switchRoom(room) {
   currentRoom = room;
@@ -152,8 +187,10 @@ async function switchRoom(room) {
 
   const content = await loadRoomFromServer(room);
   textarea.value = content;
+  lastKnownContent = content;
 
   renderRooms();
+  startPolling();
 }
 
 /* =========================================================
@@ -173,6 +210,7 @@ saveBtn.onclick = async () => {
   status.textContent = "Saving…";
 
   await saveRoomToServer(currentRoom, textarea.value);
+  lastKnownContent = textarea.value;
 
   status.textContent =
     "Saved at " + new Date().toLocaleTimeString();
@@ -234,7 +272,7 @@ function createRoom() {
     modalContent.classList.add("has-error");
 
     roomNameInput.classList.remove("shake");
-    void roomNameInput.offsetWidth; // reflow
+    void roomNameInput.offsetWidth;
     roomNameInput.classList.add("shake");
     return;
   }
