@@ -225,7 +225,12 @@ button {
 
 .primary { background: var(--accent); color: #fff; }
 .secondary { background: rgba(255,255,255,0.08); color: var(--text); }
-.danger { color: #fca5a5; }
+
+.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
 
 /* ---------- MODAL ---------- */
 .modal {
@@ -347,4 +352,37 @@ button {
 .refresh-btn:hover {
   color: var(--text);
   border-color: var(--accent);
+}
+
+.mode-switch {
+  display: flex;
+  gap: 6px;
+}
+
+.image-mode {
+  width: 100%;
+}
+
+.upload-box {
+  border: 2px dashed var(--muted);
+  padding: 40px;
+  text-align: center;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.image-gallery {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.image-gallery img {
+  width: 100%;
+  border-radius: 8px;
+}
+
+.hidden {
+  display: none !important;
 }
