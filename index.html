@@ -23,17 +23,28 @@
       </div>
 
       <div class="topbar-right">
-        <label class="toggle">
-          <input type="checkbox" id="previewToggle" />
-          <span></span> Preview
-        </label>
+		<div class="mode-switch">
+		  <button id="textModeBtn" class="pill active">Text</button>
+		  <button id="imageModeBtn" class="pill">Images</button>
+		</div>
         <button id="themeToggle" class="icon-btn">🌙</button>
       </div>
     </header>
 
     <!-- EDITOR -->
     <div class="editor full">
-      <textarea id="pasteBox" placeholder="Paste or type here…"></textarea>
+
+		<!-- TEXT MODE -->
+		<textarea id="pasteBox" placeholder="Paste or type here…"></textarea>
+		
+		<!-- IMAGE MODE -->	  
+		<div class="image-mode hidden" id="imageMode">
+			<div class="upload-box">
+				<input type="file" id="imageInput" accept="image/*" />
+				<p>Upload or drag image here</p>
+			</div>
+			<div class="image-gallery" id="imageGallery"></div>
+		</div>
 
       <!-- Update available -->
       <button id="updateBtn" class="update-btn hidden">
@@ -45,7 +56,6 @@
         ⟳ Refresh
       </button>
 
-      <div class="preview hidden" id="preview"></div>
     </div>
 
     <!-- ACTIONS -->
