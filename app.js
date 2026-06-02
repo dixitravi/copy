@@ -23,7 +23,6 @@ const status   = document.getElementById("timestamp");
 const themeToggle = document.getElementById("themeToggle");
 
 const roomPills      = document.getElementById("roomPills");
-const roomsContainer = document.getElementById("roomsContainer");
 const addPageBtn     = document.getElementById("addPageBtn");
 
 const updateBtn  = document.getElementById("updateBtn");
@@ -106,11 +105,20 @@ async function saveRoomToServer(room, content) {
   });
 }
 
+/* ✅ FIXED: correct rooms persistence */
 async function loadRoomsFromServer(key) {
   try {
-    const res = await fetch(`${API_URL}?room=${key}`, { cache: "no-store" });
+    const res = await fetch(`${API_URL}?room=${encodeURIComponent(key)}`, {
+      cache: "no-store"
+    });
+
     const data = await res.json();
-    return Array.isArray(data) ? data : ["default"];
+
+    if (Array.isArray(data) && data.length > 0) {
+      return data;
+    }
+
+    return ["default"];
   } catch {
     return ["default"];
   }
@@ -122,7 +130,7 @@ async function saveRoomsToServer(key, rooms) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       type: "rooms-update",
-      roomKey: key,
+      roomsKey: key,   // ✅ CRITICAL FIX
       rooms
     })
   });
@@ -195,6 +203,7 @@ function renderRooms() {
 
     const label = document.createElement("span");
     label.textContent = room;
+
     label.onclick = () => {
       currentRoom = room;
       mode === "text" ? switchRoom(room) : loadImages(room);
@@ -381,7 +390,8 @@ createRoomBtn.onclick = async () => {
   }
 
   rooms.push(name);
-  await saveRoomsToServer(getRoomsKey(), rooms);
+
+  await saveRoomsToServer(getRoomsKey(), rooms); // ✅ FIXED
 
   currentRoom = name;
   roomModal.classList.add("hidden");
@@ -391,11 +401,12 @@ createRoomBtn.onclick = async () => {
 };
 
 /* =========================================================
-   INIT (✅ FIXED INITIAL STATE)
+   INIT ✅ FIXED
 ========================================================= */
 (async function init() {
   textRooms  = await loadRoomsFromServer("__text_rooms__");
   imageRooms = await loadRoomsFromServer("__image_rooms__");
 
-  setMode("text"); // ✅ ensures image mode hidden on load
+  setMode("text"); // ✅ fixes initial UI state
 })();
+``
