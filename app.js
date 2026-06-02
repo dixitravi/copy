@@ -61,8 +61,10 @@ let lastServerContent = "";
 let pollingInterval = null;
 let autosaveTimer = null;
 
+let currentImages = [];
+
 /* =========================================================
-   THEME (UNCHANGED)
+   THEME
 ========================================================= */
 requestAnimationFrame(() => {
   body.classList.remove("no-theme-transition");
@@ -240,22 +242,33 @@ textarea.addEventListener("input", () => {
 });
 
 /* =========================================================
-   IMAGE MODE (SERVER BACKED)
+   IMAGE MODE (FIXED ✅)
 ========================================================= */
 async function loadImages(room) {
   const data = await loadRoomFromServer("image_" + room);
-  renderImages(data.images || []);
+
+  let imgs = [];
+  try {
+    imgs = JSON.parse(data.content || "[]");
+  } catch {
+    imgs = [];
+  }
+
+  renderImages(imgs);
 }
 
 async function saveImages(room, images) {
   await fetch(`${API_URL}?room=image_${encodeURIComponent(room)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ images })
+    body: JSON.stringify({
+      type: "content-update",
+      content: JSON.stringify(images), // ✅ FIXED
+      updatedBy: CURRENT_USER,
+      updatedAt: new Date().toISOString()
+    })
   });
 }
-
-let currentImages = [];
 
 function renderImages(images) {
   currentImages = images;
@@ -269,6 +282,7 @@ function renderImages(images) {
 
     const remove = document.createElement("button");
     remove.textContent = "×";
+
     remove.onclick = async () => {
       currentImages.splice(index, 1);
       await saveImages(currentRoom, currentImages);
@@ -297,31 +311,35 @@ imageInput.onchange = async () => {
 /* =========================================================
    MODE SWITCH
 ========================================================= */
-textModeBtn.onclick = () => {
-  mode = "text";
-  textModeBtn.classList.add("active");
-  imageModeBtn.classList.remove("active");
+function setMode(newMode) {
+  mode = newMode;
 
-  textarea.classList.remove("hidden");
-  imageModeEl.classList.add("hidden");
+  if (mode === "text") {
+    textModeBtn.classList.add("active");
+    imageModeBtn.classList.remove("active");
 
-  currentRoom = textRooms[0];
-  renderRooms();
-  switchRoom(currentRoom);
-};
+    textarea.classList.remove("hidden");
+    imageModeEl.classList.add("hidden");
 
-imageModeBtn.onclick = () => {
-  mode = "image";
-  imageModeBtn.classList.add("active");
-  textModeBtn.classList.remove("active");
+    currentRoom = textRooms[0];
+    renderRooms();
+    switchRoom(currentRoom);
 
-  textarea.classList.add("hidden");
-  imageModeEl.classList.remove("hidden");
+  } else {
+    imageModeBtn.classList.add("active");
+    textModeBtn.classList.remove("active");
 
-  currentRoom = imageRooms[0];
-  renderRooms();
-  loadImages(currentRoom);
-};
+    textarea.classList.add("hidden");
+    imageModeEl.classList.remove("hidden");
+
+    currentRoom = imageRooms[0];
+    renderRooms();
+    loadImages(currentRoom);
+  }
+}
+
+textModeBtn.onclick = () => setMode("text");
+imageModeBtn.onclick = () => setMode("image");
 
 /* =========================================================
    ACTIONS
@@ -373,12 +391,11 @@ createRoomBtn.onclick = async () => {
 };
 
 /* =========================================================
-   INIT
+   INIT (✅ FIXED INITIAL STATE)
 ========================================================= */
 (async function init() {
   textRooms  = await loadRoomsFromServer("__text_rooms__");
   imageRooms = await loadRoomsFromServer("__image_rooms__");
 
-  renderRooms();
-  switchRoom(currentRoom);
+  setMode("text"); // ✅ ensures image mode hidden on load
 })();
