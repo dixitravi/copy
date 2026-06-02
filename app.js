@@ -22,8 +22,8 @@ const status   = document.getElementById("timestamp");
 
 const themeToggle = document.getElementById("themeToggle");
 
-const roomPills      = document.getElementById("roomPills");
-const addPageBtn     = document.getElementById("addPageBtn");
+const roomPills = document.getElementById("roomPills");
+const addPageBtn = document.getElementById("addPageBtn");
 
 const updateBtn  = document.getElementById("updateBtn");
 const refreshBtn = document.getElementById("refreshBtn");
@@ -61,6 +61,21 @@ let pollingInterval = null;
 let autosaveTimer = null;
 
 let currentImages = [];
+
+/* =========================================================
+   NOTIFICATIONS ✅
+========================================================= */
+function initNotifications() {
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+}
+
+function showNotification(message) {
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(message);
+  }
+}
 
 /* =========================================================
    THEME
@@ -105,7 +120,6 @@ async function saveRoomToServer(room, content) {
   });
 }
 
-/* ✅ FIXED: correct rooms persistence */
 async function loadRoomsFromServer(key) {
   try {
     const res = await fetch(`${API_URL}?room=${encodeURIComponent(key)}`, {
@@ -113,12 +127,7 @@ async function loadRoomsFromServer(key) {
     });
 
     const data = await res.json();
-
-    if (Array.isArray(data) && data.length > 0) {
-      return data;
-    }
-
-    return ["default"];
+    return Array.isArray(data) && data.length ? data : ["default"];
   } catch {
     return ["default"];
   }
@@ -130,7 +139,7 @@ async function saveRoomsToServer(key, rooms) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       type: "rooms-update",
-      roomsKey: key,   // ✅ CRITICAL FIX
+      roomsKey: key,
       rooms
     })
   });
@@ -157,6 +166,8 @@ async function saveIfDirty() {
     lastServerContent = textarea.value;
     updateBtn.classList.add("hidden");
     await refreshStatus(currentRoom);
+
+    showNotification("✅ Text saved");
   }
 }
 
@@ -247,11 +258,13 @@ textarea.addEventListener("input", () => {
     lastServerContent = textarea.value;
     updateBtn.classList.add("hidden");
     await refreshStatus(currentRoom);
+
+    showNotification("✅ Auto-saved");
   }, 2000);
 });
 
 /* =========================================================
-   IMAGE MODE (FIXED ✅)
+   IMAGE MODE
 ========================================================= */
 async function loadImages(room) {
   const data = await loadRoomFromServer("image_" + room);
@@ -259,9 +272,7 @@ async function loadImages(room) {
   let imgs = [];
   try {
     imgs = JSON.parse(data.content || "[]");
-  } catch {
-    imgs = [];
-  }
+  } catch {}
 
   renderImages(imgs);
 }
@@ -272,7 +283,7 @@ async function saveImages(room, images) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       type: "content-update",
-      content: JSON.stringify(images), // ✅ FIXED
+      content: JSON.stringify(images),
       updatedBy: CURRENT_USER,
       updatedAt: new Date().toISOString()
     })
@@ -296,6 +307,8 @@ function renderImages(images) {
       currentImages.splice(index, 1);
       await saveImages(currentRoom, currentImages);
       renderImages(currentImages);
+
+      showNotification("🖼️ Image removed");
     };
 
     wrapper.appendChild(img);
@@ -309,11 +322,15 @@ imageInput.onchange = async () => {
   if (!file) return;
 
   const reader = new FileReader();
+
   reader.onload = async () => {
     currentImages.push(reader.result);
     await saveImages(currentRoom, currentImages);
     renderImages(currentImages);
+
+    showNotification("🖼️ Image uploaded & saved");
   };
+
   reader.readAsDataURL(file);
 };
 
@@ -353,7 +370,10 @@ imageModeBtn.onclick = () => setMode("image");
 /* =========================================================
    ACTIONS
 ========================================================= */
-saveBtn.onclick = saveIfDirty;
+saveBtn.onclick = async () => {
+  await saveIfDirty();
+  showNotification("✅ Saved manually");
+};
 
 copyBtn.onclick = () =>
   mode === "text" && navigator.clipboard.writeText(textarea.value);
@@ -364,6 +384,8 @@ clearBtn.onclick = async () => {
     currentImages = [];
     await saveImages(currentRoom, []);
     renderImages([]);
+
+    showNotification("🖼️ Images cleared");
   }
 };
 
@@ -390,23 +412,25 @@ createRoomBtn.onclick = async () => {
   }
 
   rooms.push(name);
-
-  await saveRoomsToServer(getRoomsKey(), rooms); // ✅ FIXED
+  await saveRoomsToServer(getRoomsKey(), rooms);
 
   currentRoom = name;
   roomModal.classList.add("hidden");
 
   renderRooms();
   mode === "text" ? switchRoom(name) : loadImages(name);
+
+  showNotification("✅ New tab created");
 };
 
 /* =========================================================
-   INIT ✅ FIXED
+   INIT
 ========================================================= */
 (async function init() {
+  initNotifications();
+
   textRooms  = await loadRoomsFromServer("__text_rooms__");
   imageRooms = await loadRoomsFromServer("__image_rooms__");
 
-  setMode("text"); // ✅ fixes initial UI state
+  setMode("text");
 })();
-``
