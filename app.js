@@ -50,10 +50,8 @@ const createRoomBtn = document.getElementById("createRoomBtn");
    STATE
 ========================================================= */
 let mode = "text";
-
 let textRooms = ["default"];
 let imageRooms = ["default"];
-
 let currentRoom = "default";
 let lastServerContent = "";
 
@@ -63,17 +61,17 @@ let autosaveTimer = null;
 let currentImages = [];
 
 /* =========================================================
-   NOTIFICATIONS ✅
+   NOTIFICATIONS ✅ FIXED
 ========================================================= */
-function initNotifications() {
-  if ("Notification" in window && Notification.permission === "default") {
-    Notification.requestPermission();
-  }
-}
-
 function showNotification(message) {
-  if ("Notification" in window && Notification.permission === "granted") {
+  if (!("Notification" in window)) return;
+
+  if (Notification.permission === "granted") {
     new Notification(message);
+  } else if (Notification.permission !== "denied") {
+    Notification.requestPermission().then(permission => {
+      if (permission === "granted") new Notification(message);
+    });
   }
 }
 
@@ -120,12 +118,10 @@ async function saveRoomToServer(room, content) {
   });
 }
 
-async function loadRoomsFromServer(key) {
+/* ✅ FIX: using single backend key */
+async function loadRoomsFromServer() {
   try {
-    const res = await fetch(`${API_URL}?room=${encodeURIComponent(key)}`, {
-      cache: "no-store"
-    });
-
+    const res = await fetch(`${API_URL}?room=__rooms__`, { cache: "no-store" });
     const data = await res.json();
     return Array.isArray(data) && data.length ? data : ["default"];
   } catch {
@@ -133,13 +129,12 @@ async function loadRoomsFromServer(key) {
   }
 }
 
-async function saveRoomsToServer(key, rooms) {
+async function saveRoomsToServer(rooms) {
   await fetch(API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       type: "rooms-update",
-      roomsKey: key,
       rooms
     })
   });
@@ -166,7 +161,6 @@ async function saveIfDirty() {
     lastServerContent = textarea.value;
     updateBtn.classList.add("hidden");
     await refreshStatus(currentRoom);
-
     showNotification("✅ Text saved");
   }
 }
@@ -194,21 +188,12 @@ function startPolling() {
 }
 
 /* =========================================================
-   ROOM RENDER
+   ROOM RENDER ✅ FIXED
 ========================================================= */
-function getRoomsKey() {
-  return mode === "text" ? "__text_rooms__" : "__image_rooms__";
-}
-
-function getCurrentRooms() {
-  return mode === "text" ? textRooms : imageRooms;
-}
-
 function renderRooms() {
-  const list = getCurrentRooms();
   roomPills.innerHTML = "";
 
-  list.forEach(room => {
+  textRooms.forEach(room => {
     const pill = document.createElement("div");
     pill.className = "pill" + (room === currentRoom ? " active" : "");
 
@@ -230,7 +215,6 @@ function renderRooms() {
 ========================================================= */
 async function switchRoom(room) {
   await saveIfDirty();
-  currentRoom = room;
 
   textarea.value = "Loading...";
   textarea.disabled = true;
@@ -258,7 +242,6 @@ textarea.addEventListener("input", () => {
     lastServerContent = textarea.value;
     updateBtn.classList.add("hidden");
     await refreshStatus(currentRoom);
-
     showNotification("✅ Auto-saved");
   }, 2000);
 });
@@ -307,7 +290,6 @@ function renderImages(images) {
       currentImages.splice(index, 1);
       await saveImages(currentRoom, currentImages);
       renderImages(currentImages);
-
       showNotification("🖼️ Image removed");
     };
 
@@ -322,12 +304,10 @@ imageInput.onchange = async () => {
   if (!file) return;
 
   const reader = new FileReader();
-
   reader.onload = async () => {
     currentImages.push(reader.result);
     await saveImages(currentRoom, currentImages);
     renderImages(currentImages);
-
     showNotification("🖼️ Image uploaded & saved");
   };
 
@@ -384,13 +364,12 @@ clearBtn.onclick = async () => {
     currentImages = [];
     await saveImages(currentRoom, []);
     renderImages([]);
-
     showNotification("🖼️ Images cleared");
   }
 };
 
 /* =========================================================
-   MODAL
+   MODAL ✅ FIXED ROOM SAVE
 ========================================================= */
 addPageBtn.onclick = () => {
   roomModal.classList.remove("hidden");
@@ -402,35 +381,36 @@ closeModalBtn.onclick = cancelModal.onclick = () => {
 
 createRoomBtn.onclick = async () => {
   const name = roomNameInput.value.trim();
-  const rooms = getCurrentRooms();
 
-  if (!name || rooms.includes(name)) {
+  if (!name || textRooms.includes(name)) {
     roomError.classList.remove("hidden");
     modalContent.classList.add("shake");
     setTimeout(() => modalContent.classList.remove("shake"), 250);
     return;
   }
 
-  rooms.push(name);
-  await saveRoomsToServer(getRoomsKey(), rooms);
+  textRooms.push(name);
+  imageRooms.push(name);
+
+  await saveRoomsToServer(textRooms); // ✅ FIXED
 
   currentRoom = name;
   roomModal.classList.add("hidden");
 
   renderRooms();
-  mode === "text" ? switchRoom(name) : loadImages(name);
+  setMode(mode);
 
   showNotification("✅ New tab created");
 };
 
 /* =========================================================
-   INIT
+   INIT ✅ FIXED
 ========================================================= */
 (async function init() {
-  initNotifications();
+  const rooms = await loadRoomsFromServer();
 
-  textRooms  = await loadRoomsFromServer("__text_rooms__");
-  imageRooms = await loadRoomsFromServer("__image_rooms__");
+  textRooms = [...rooms];
+  imageRooms = [...rooms];
 
   setMode("text");
 })();
